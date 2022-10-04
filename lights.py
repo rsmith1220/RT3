@@ -1,22 +1,21 @@
 import numpy as np
-import matesRS
 
 DIR_LIGHT = 0
 POINT_LIGHT = 1
 AMBIENT_LIGHT = 2
 
 def reflectVector(normal, direction):
-    reflect = 2 * matesRS.dot(normal, direction)
+    reflect = 2 * np.dot(normal, direction)
     reflect = np.multiply(reflect, normal)
-    reflect = matesRS.subtract(reflect, direction)
-    reflect = matesRS.normal(reflect)
+    reflect = np.subtract(reflect, direction)
+    reflect = reflect / np.linalg.norm(reflect)
     return reflect
 
 def refractVector(normal, direction, ior):
-    #snells law
-    cosi = max(-1, min(1, matesRS.dot(direction,normal)))
-    etai=1
-    etat=ior
+    # Snell's Law
+    cosi = max(-1, min(1, np.dot(direction, normal)))
+    etai = 1
+    etat = ior
 
     if cosi < 0:
         cosi = -cosi
@@ -25,47 +24,49 @@ def refractVector(normal, direction, ior):
         normal = np.array(normal) * -1
 
     eta = etai / etat
-    k = 1 -(eta **2)* (1 - (cosi * cosi))
-    
-    
-    if k < 0: #total internal reflection
+    k = 1 - (eta**2) * (1 - (cosi**2) )
+
+    if k < 0: # Total Internal Reflection
         return None
-    
-    R = eta * np.array(direction) +(eta*cosi -k**0.5)*normal
+
+    R = eta * np.array(direction) + (eta * cosi - k**0.5) * normal
     return R
 
+
 def fresnel(normal, direction, ior):
-    #fresnels law
-    cosi = max(-1, min(1, matesRS.dot(direction,normal)))
-    etai=1
-    etat=ior
+    # Fresnel Equation
+    cosi = max(-1, min(1, np.dot(direction, normal)))
+    etai = 1
+    etat = ior
 
     if cosi > 0:
         etai, etat = etat, etai
 
-    sint = etai/ etat *(max(0,1-cosi**2)**0.5)
+    sint = etai / etat * (max(0, 1 - cosi**2) ** 0.5)
 
-    if sint >= 1:
+
+    if sint >= 1: # Total Internal Reflection
         return 1
 
-    cost = max(0,1-sint**2)**0.5
+    cost = max(0, 1 - sint**2) ** 0.5
     cosi = abs(cosi)
 
-    Rs =((etat *cosi)-(etai*cost))/ ((etat*cosi)+(etai*cost))
-    Rp=((etat *cosi)-(etat*cost))/ ((etai*cosi)+(etat*cost))
-    
-    return (Rs**2 +Rp**2)/2
+    Rs = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost))
+    Rp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost))
+
+    return (Rs**2 + Rp**2) / 2
+
 
 class DirectionalLight(object):
     def __init__(self, direction = (0,-1,0), intensity = 1, color = (1,1,1)):
-        self.direction = matesRS.normal(direction)
+        self.direction = direction / np.linalg.norm(direction)
         self.intensity = intensity
         self.color = color
         self.lightType = DIR_LIGHT
 
     def getDiffuseColor(self, intersect, raytracer):
         light_dir = np.array(self.direction) * -1
-        intensity = matesRS.dot(intersect.normal, light_dir) * self.intensity
+        intensity = np.dot(intersect.normal, light_dir) * self.intensity
         intensity = float(max(0, intensity))            
                                                         
         diffuseColor = np.array([intensity * self.color[0],
@@ -78,10 +79,10 @@ class DirectionalLight(object):
         light_dir = np.array(self.direction) * -1
         reflect = reflectVector(intersect.normal, light_dir)
 
-        view_dir = matesRS.subtract( raytracer.camPosition, intersect.point)
-        view_dir = matesRS.normal(view_dir)
+        view_dir = np.subtract( raytracer.camPosition, intersect.point)
+        view_dir = view_dir / np.linalg.norm(view_dir)
 
-        spec_intensity = self.intensity * max(0,matesRS.dot(view_dir, reflect)) ** intersect.sceneObj.material.spec
+        spec_intensity = self.intensity * max(0,np.dot(view_dir, reflect)) ** intersect.sceneObj.material.spec
         specColor = np.array([spec_intensity * self.color[0],
                               spec_intensity * self.color[1],
                               spec_intensity * self.color[2]])
@@ -109,14 +110,14 @@ class PointLight(object):
         self.lightType = POINT_LIGHT
 
     def getDiffuseColor(self, intersect, raytracer):
-        light_dir = matesRS.subtract(self.point, intersect.point)
-        light_dir = matesRS.normal(light_dir)
+        light_dir = np.subtract(self.point, intersect.point)
+        light_dir = light_dir / np.linalg.norm(light_dir)
 
         # att = 1 / (Kc + Kl * d + Kq * d * d)
         #lightDistance = np.linalg.norm(np.subtract(self.point, intersect.point))
         #attenuation = 1.0 / (self.constant + self.linear * lightDistance + self.quad * lightDistance ** 2)
         attenuation = 1.0
-        intensity = matesRS.dot(intersect.normal, light_dir) * attenuation
+        intensity = np.dot(intersect.normal, light_dir) * attenuation
         intensity = float(max(0, intensity))            
                                                         
         diffuseColor = np.array([intensity * self.color[0],
@@ -126,20 +127,20 @@ class PointLight(object):
         return diffuseColor
 
     def getSpecColor(self, intersect, raytracer):
-        light_dir = matesRS.subtract(self.point, intersect.point)
-        light_dir = light_dir / matesRS.linalg.norm(light_dir)
+        light_dir = np.subtract(self.point, intersect.point)
+        light_dir = light_dir / np.linalg.norm(light_dir)
 
         reflect = reflectVector(intersect.normal, light_dir)
 
-        view_dir = matesRS.subtract( raytracer.camPosition, intersect.point)
-        view_dir = matesRS.normal(view_dir)
+        view_dir = np.subtract( raytracer.camPosition, intersect.point)
+        view_dir = view_dir / np.linalg.norm(view_dir)
 
         # att = 1 / (Kc + Kl * d + Kq * d * d)
         #lightDistance = np.linalg.norm(np.subtract(self.point, intersect.point))
         #attenuation = 1.0 / (self.constant + self.linear * lightDistance + self.quad * lightDistance ** 2)
         attenuation = 1.0
 
-        spec_intensity = attenuation * max(0,matesRS.dot(view_dir, reflect)) ** intersect.sceneObj.material.spec
+        spec_intensity = attenuation * max(0,np.dot(view_dir, reflect)) ** intersect.sceneObj.material.spec
         specColor = np.array([spec_intensity * self.color[0],
                               spec_intensity * self.color[1],
                               spec_intensity * self.color[2]])
@@ -148,8 +149,8 @@ class PointLight(object):
 
     def getShadowIntensity(self, intersect, raytracer):
         light_dir = np.subtract(self.point, intersect.point)
-        light_distance= np.linalg.norm(light_dir)
-        light_dir = light_dir/light_distance
+        light_distance = np.linalg.norm(light_dir)
+        light_dir = light_dir / light_distance
 
         shadow_intensity = 0
         shadow_intersect = raytracer.scene_intersect(intersect.point, light_dir, intersect.sceneObj)
